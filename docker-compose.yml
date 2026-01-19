@@ -1,0 +1,11 @@
+services:
+  md-to-pdf:
+    build: .
+    container_name: md-to-pdf-service
+    ports:
+      - "3000:3000"
+    environment:
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    volumes:
+      - ./src:/app/src
+    restart: unless-stopped
