@@ -2,12 +2,37 @@ import type { Request, Response } from "express";
 import puppeteer from "puppeteer-core";
 import { md } from "../lib/markdownIt";
 
+const MAX_MARKDOWN_SIZE = 500 * 1024; // 500KB
+
+function sanitizeMarkdown(input: string): string {
+  const dummy = document.createElement('div');
+  dummy.textContent = input;
+  return dummy.innerHTML;
+}
+
+function validateInput(markdown: string): string | null {
+  if (!markdown || typeof markdown !== "string") {
+    return "Nenhum texto Markdown fornecido.";
+  }
+  if (markdown.length > MAX_MARKDOWN_SIZE) {
+    return `Texto muito grande. Limite: ${MAX_MARKDOWN_SIZE / 1024}KB`;
+  }
+  return null;
+}
+
 export async function convert(req: Request, res: Response) {
   try {
-    const markdownText = req.body.markdown || "";
+    let markdownText = "";
 
-    if (!markdownText) {
-      return res.status(400).send("Nenhum texto Markdown fornecido.");
+    if (req.file) {
+      markdownText = req.file.buffer.toString("utf-8");
+    } else if (req.body.markdown) {
+      markdownText = req.body.markdown.toString();
+    }
+
+    const validationError = validateInput(markdownText);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
     const htmlContent = md.render(markdownText);
@@ -34,6 +59,15 @@ export async function convert(req: Request, res: Response) {
             pre { background-color: #f6f8fa; padding: 16px; overflow: auto; border-radius: 3px; line-height: 1.45; }
             pre code { background-color: transparent; padding: 0; font-size: 100%; }
             blockquote { border-left: .25em solid #dfe2e5; color: #6a737d; padding: 0 1em; margin: 0 0 16px 0; }
+            
+            /* Task Lists */
+            .task-list-item { list-style-type: none; margin-left: -20px; }
+            .task-list-item input { margin-right: 8px; }
+            
+            /* Footnotes */
+            .footnote-ref { font-size: 0.75em; vertical-align: super; }
+            .footnotes { margin-top: 24px; border-top: 1px solid #eaecef; padding-top: 12px; font-size: 0.85em; }
+            .footnotes-list { padding-left: 16px; }
             
             /* Outros */
             img { max-width: 100%; box-sizing: content-box; background-color: #fff; }
@@ -75,6 +109,6 @@ export async function convert(req: Request, res: Response) {
     res.send(pdfBuffer);
   } catch (error: any) {
     console.error(error);
-    res.status(500).send(error?.message);
+    res.status(500).json({ error: error?.message || "Erro interno" });
   }
 }
